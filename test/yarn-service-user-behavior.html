@@ -1,0 +1,208 @@
+<html>
+  <head>
+
+    <title>yarn-service-user-behavior tests</title>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes">
+
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+
+    <script src="../../web-component-tester/browser.js"></script>
+    <script src="../../test-fixture/test-fixture-mocha.js"></script>
+
+    <link rel="import" href="../../test-fixture/test-fixture.html">
+    <link rel="import" href="test-api.html">
+
+  </head>
+  <body>
+
+    <test-fixture id="withAuth">
+      <template>
+        <test-api endpoint="authenticatedEndpoint"></my-api>
+      </template>
+    </test-fixture>
+
+    <test-fixture id="withoutAuth">
+      <template>
+        <test-api endpoint="openEndpoint"></my-api>
+      </template>
+    </test-fixture>
+
+    <script>
+      suite('<yarn-service-user-behavior>', function() {
+
+        var server;
+        var withAuth;
+        var withoutAuth;
+
+        setup(function() {
+          server = sinon.fakeServer.create();
+          server.respondImmediately = true;
+
+          withAuth = fixture('withAuth');
+          withoutAuth = fixture('withoutAuth');
+
+          localStorage.removeItem(withAuth.localStorageKey);
+        });
+
+        teardown(function() {
+          server.restore();
+          localStorage.removeItem(withAuth.localStorageKey);
+        });
+
+        var fail = function(message, code) {
+
+          message = message || 'Internal error';
+          code = code || 500;
+
+          var payload = JSON.stringify({
+            statusCode: code,
+            message: message
+          });
+
+          var length = payload.length;
+
+          return [
+            code,
+            {
+              'content-type': 'application/json',
+              'content-length': length
+            },
+            payload
+          ];
+        };
+
+        var succeed = function(message) {
+
+          var payload = JSON.stringify(message);
+          var length = payload.length;
+
+          return [
+            200,
+            {
+              'content-type': 'application/json',
+              'content-length': length
+            },
+            payload
+          ];
+        };
+
+
+        test('succeeds with one call for simple request.', function(done) {
+
+          sinon.spy(server, 'processRequest');
+
+          server.respondWith('GET', 'http://sinon/open', succeed({ success: true }));
+
+          withoutAuth.generateRequest().completes
+          .then(function(request) {
+
+            expect(request.response.success).to.equal(true);
+            expect(server.processRequest.callCount).to.equal(1);
+
+            server.processRequest.restore();
+            done();
+          })
+          .catch(function(err) {
+
+            server.processRequest.restore();
+            done(err);
+          });
+
+        });
+
+
+        test('fails with one call for simple request.', function(done) {
+
+          sinon.spy(server, 'processRequest');
+
+          server.respondWith('GET', 'http://sinon/open', fail('Not a token error', 401));
+
+          withoutAuth.generateRequest().completes
+          .then(function(request) {
+
+            server.processRequest.restore();
+            done(new Error('Request should have failed'));
+          })
+          .catch(function(err) {
+
+            expect(JSON.parse(err.request.xhr.responseText).message).to.equal('Not a token error');
+            expect(server.processRequest.callCount).to.equal(1);
+            server.processRequest.restore();
+            done();
+          });
+
+        });
+
+        test('succeeds when refresh necessary.', function(done) {
+
+          sinon.spy(server, 'processRequest');
+
+          server.respondWith('POST', 'http://sinon/authenticated', function(xhr) {
+
+            xhr.respond.apply(xhr, fail('Token expired', 401));
+
+            server.respondWith('POST', 'http://sinon/authenticated', succeed({ success: true }));
+          });
+
+          server.respondWith('POST', 'http://sinon/refresh', succeed({
+            refresh: 'token',
+            access: 'token'
+          }));
+
+          withAuth.generateRequest().completes
+          .then(function(request) {
+
+            expect(request.response.success).to.equal(true);
+            expect(server.processRequest.callCount).to.equal(3);
+            server.processRequest.restore();
+            done();
+          })
+          .catch(function(err) {
+
+            server.processRequest.restore();
+            done(err);
+          });
+
+        });
+
+        test('fails when refresh necessary.', function(done) {
+
+          sinon.spy(server, 'processRequest');
+
+          server.respondWith('POST', 'http://sinon/authenticated', function(xhr) {
+
+            xhr.respond.apply(xhr, fail('Token expired', 401));
+
+            server.respondWith('POST', 'http://sinon/authenticated', fail('Failure from retry.', 401));
+          });
+
+          server.respondWith('POST', 'http://sinon/refresh', succeed({
+            refresh: 'token',
+            access: 'token'
+          }));
+
+          withAuth.generateRequest().completes
+          .then(function(request) {
+
+            server.processRequest.restore();
+            done(new Error('Request should have failed'));
+          })
+          .catch(function(err) {
+
+            expect(JSON.parse(err.request.xhr.responseText).message).to.equal('Failure from retry.');
+            expect(server.processRequest.callCount).to.equal(3);
+            server.processRequest.restore();
+            done();
+          });
+
+        });
+
+      });
+
+    </script>
+
+  </body>
+</html>

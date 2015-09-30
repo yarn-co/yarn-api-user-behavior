@@ -1,0 +1,242 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../yarn-endpoints-behavior/yarn-endpoints-behavior.html">
+<link rel="import" href="../iron-ajax/iron-ajax.html">
+
+<script>
+var YarnBehaviors = YarnBehaviors || {};
+
+(function() {
+
+  /**
+  Docs
+
+  @polymerBehavior YarnBehaviors.ServiceUserBehavior
+  */
+  var ServiceUserBehaviorImpl = {
+
+    properties: {
+
+      refreshTokensEndpoint: {
+        type: String,
+        value: 'refreshTokens'
+      },
+
+      localStorageKey: {
+        type: String,
+        value: 'yarniverseTokens'
+      },
+
+      requestor: {
+        type: Object,
+        value: function() {
+          return document.createElement('iron-ajax');
+        },
+      },
+
+      _refreshRequestor: {
+        type: Object,
+        value: function() {
+          return document.createElement('iron-ajax');
+        }
+      }
+
+    },
+
+    observers: [
+      '_maintainRequestor(requestor, url, method)'
+    ],
+
+    ready: function() {
+
+      // Set the refresh endpoint, etc. on the refresh requestor
+      var origEndpoint = this.endpoint;
+
+      // By now hopefully endpoints has been configured
+      this.endpoint = this.refreshTokensEndpoint;
+
+      this._refreshRequestor.contentType = 'application/json';
+      this._refreshRequestor.handleAs = 'json';
+      this._refreshRequestor.method = this.method;
+      this._refreshRequestor.url = this.url;
+
+      this.endpoint = origEndpoint;
+    },
+
+    getTokens: function() {
+
+      var rawItem = localStorage.getItem(this.localStorageKey);
+
+      if (!rawItem) {
+        return null;
+      }
+
+      return JSON.parse(rawItem);
+    },
+
+    setTokens: function(tokens) {
+
+      localStorage.setItem(this.localStorageKey, JSON.stringify(tokens));
+    },
+
+    refreshTokens: function() {
+
+      var tokens = this.getTokens() || {};
+
+      this._refreshRequestor.body = {
+        refresh: tokens.refresh
+      };
+
+      var request = this._refreshRequestor.generateRequest();
+
+      return new Promise(function(resolve, reject) {
+
+        request.completes.then(function(response) {
+
+          if (response.access && response.refresh) {
+            this.setTokens(response);
+          }
+
+          resolve(request);
+        })
+        .catch(function(err) {
+
+          err.request = request;
+          reject(err);
+        });
+      });
+    },
+
+    generateRequest: function() {
+
+      var self = this;
+
+      var origEndpoint = this.endpoint;
+
+      // Add auth
+      this._setAuthHeaders();
+
+      var originalRequestOptions = this.exportRequestorOptions();
+      var originalRequest = this.requestor.generateRequest();
+
+      return {
+
+        options: originalRequestOptions,
+
+        completes: new Promise(function(resolve, reject) {
+
+          originalRequest.completes.then(function(response) {
+
+            resolve(originalRequest);
+          })
+          .catch(function(err) {
+
+            var xhr = originalRequest.xhr;
+            var response = JSON.parse(xhr.responseText);
+
+            // If the error was just a refresh token error...
+            if (xhr.status === 401 && response &&
+                ~response.message.indexOf('Token expired')) {
+
+              // ...refresh the tokens.
+              self.refreshTokens().then(function(tokens) {
+
+                // Then try again, doing the dance of setting/resetting options
+                var preRetryRequestOptions = self.exportRequestorOptions();
+
+                self.importRequestorOptions(originalRequestOptions);
+                self._setAuthHeaders();
+
+                var retryRequest = self.requestor.generateRequest();
+
+                self.importRequestorOptions(preRetryRequestOptions);
+
+                retryRequest.completes.then(function(response) {
+
+                  // Worked after retry
+                  resolve(retryRequest);
+                })
+                .catch(function(err) {
+
+                  // No luck after retry
+                  err.request = retryRequest;
+                  reject(err);
+                });
+
+              })
+              .catch(function(err) {
+
+                // No such luck...
+                err.refreshRequest = err.request;
+                err.request = originalRequest;
+                reject(err);
+              });
+
+              return;
+            }
+
+            // Failed naturally
+            err.request = originalRequest;
+            reject(err);
+          });
+        })
+      }
+    },
+
+    exportRequestorOptions: function() {
+
+      var options = {};
+
+      var optionNames = [
+        'url', 'method', 'params',
+        'headers', 'contentType', 'body',
+        'handleAs', 'withCredentials'
+      ];
+
+      var optionName;
+      for (var i = 0; i < optionNames.length; ++i) {
+
+        optionName = optionNames[i];
+        options[optionName] = this.requestor[optionName];
+      }
+
+      return options;
+    },
+
+    importRequestorOptions: function(options) {
+
+      var optionName;
+      var optionNames = Object.keys(options);
+      for (var i = 0; i < optionNames.length; ++i) {
+
+        optionName = optionNames[i];
+        this.requestor[optionName] = options[optionName];
+      }
+
+    },
+
+    _maintainRequestor: function() {
+
+      this.requestor.url = this.url;
+      this.requestor.method = this.method;
+    },
+
+    _setAuthHeaders: function() {
+
+      var tokens = this.getTokens();
+
+      if (tokens && tokens.access) {
+        this.requestor.headers.authorization = 'Bearer ' + tokens.access;
+      } else {
+        delete this.requestor.authorization;
+      }
+    }
+
+  };
+
+  YarnBehaviors.ServiceUserBehavior = [
+    YarnBehaviors.EndpointsBehavior,
+    ServiceUserBehaviorImpl
+  ];
+
+})();
+</script>

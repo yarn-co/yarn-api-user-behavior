@@ -1,0 +1,56 @@
+<link rel="import" href="../../polymer/polymer.html">
+<link rel="import" href="../yarn-service-user-behavior.html">
+
+<dom-module id="test-api"></dom-module>
+
+<script>
+(function() {
+
+  Polymer({
+
+    is: 'test-api',
+
+    properties: {
+
+      endpoints: {
+        type: Object,
+        value: function() {
+
+          return {
+            authenticatedEndpoint: {
+              method: "POST",
+              path: "/authenticated"
+            },
+            openEndpoint: {
+              method: "GET",
+              path: "/open"
+            },
+            refreshTokens: {
+              method: "POST",
+              path: "/refresh"
+            }
+          }
+
+        }
+      },
+
+      host: {
+        type: String,
+        value: 'sinon'
+      },
+
+      localStorageKey: {
+        type: String,
+        value: '_test_yarniverseTokens'
+      }
+
+    },
+
+    behaviors: [
+      YarnBehaviors.ServiceUserBehavior
+    ]
+
+  });
+
+})();
+</script>

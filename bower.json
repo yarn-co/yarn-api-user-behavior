@@ -1,0 +1,28 @@
+{
+  "name": "yarn-service-user-behavior",
+  "version": "0.0.1",
+  "keywords": [
+    "web-components",
+    "polymer"
+  ],
+  "license": "MIT",
+  "description": "Polymer v1 tool to use Yarn services",
+  "authors": [
+    "Devin Ivy <devin@bigroomstudios.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/yarn-co/yarn-service-user-behavior.git"
+  },
+  "main": "yarn-service-user-behavior.html",
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.0.0",
+    "yarn-endpoints-behavior": "yarn-co/yarn-endpoints-behavior#^0.1.2"
+  },
+  "devDependencies": {
+    "iron-component-page": "polymerelements/iron-component-page#^1.0.0",
+    "test-fixture": "polymerelements/test-fixture#^1.0.0",
+    "web-component-tester": "*",
+    "webcomponentsjs": "webcomponents/webcomponentsjs#^0.7.0"
+  }
+}
