@@ -1,4 +1,5 @@
 <link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../promise-polyfill/promise-polyfill-lite.html">
 <link rel="import" href="../yarn-endpoints-behavior/yarn-endpoints-behavior.html">
 <link rel="import" href="../iron-ajax/iron-ajax.html">
 
@@ -10,9 +11,9 @@ var YarnBehaviors = YarnBehaviors || {};
   /**
   Docs
 
-  @polymerBehavior YarnBehaviors.ServiceUserBehavior
+  @polymerBehavior YarnBehaviors.ApiUserBehavior
   */
-  var ServiceUserBehaviorImpl = {
+  var ApiUserBehaviorImpl = {
 
     properties: {
 
@@ -80,6 +81,8 @@ var YarnBehaviors = YarnBehaviors || {};
 
     refreshTokens: function() {
 
+      var self = this;
+
       var tokens = this.getTokens() || {};
 
       this._refreshRequestor.body = {
@@ -90,10 +93,12 @@ var YarnBehaviors = YarnBehaviors || {};
 
       return new Promise(function(resolve, reject) {
 
-        request.completes.then(function(response) {
+        request.completes.then(function() {
+
+          var response = request.response;
 
           if (response.access && response.refresh) {
-            this.setTokens(response);
+            self.setTokens(response);
           }
 
           resolve(request);
@@ -124,21 +129,21 @@ var YarnBehaviors = YarnBehaviors || {};
 
         completes: new Promise(function(resolve, reject) {
 
-          originalRequest.completes.then(function(response) {
+          originalRequest.completes.then(function() {
 
             resolve(originalRequest);
           })
           .catch(function(err) {
 
             var xhr = originalRequest.xhr;
-            var response = JSON.parse(xhr.responseText);
+            var response = xhr.response || JSON.parse(xhr.responseText);
 
             // If the error was just a refresh token error...
             if (xhr.status === 401 && response &&
                 ~response.message.indexOf('Token expired')) {
 
               // ...refresh the tokens.
-              self.refreshTokens().then(function(tokens) {
+              self.refreshTokens().then(function() {
 
                 // Then try again, doing the dance of setting/resetting options
                 var preRetryRequestOptions = self.exportRequestorOptions();
@@ -150,7 +155,7 @@ var YarnBehaviors = YarnBehaviors || {};
 
                 self.importRequestorOptions(preRetryRequestOptions);
 
-                retryRequest.completes.then(function(response) {
+                retryRequest.completes.then(function() {
 
                   // Worked after retry
                   resolve(retryRequest);
@@ -233,9 +238,9 @@ var YarnBehaviors = YarnBehaviors || {};
 
   };
 
-  YarnBehaviors.ServiceUserBehavior = [
+  YarnBehaviors.ApiUserBehavior = [
     YarnBehaviors.EndpointsBehavior,
-    ServiceUserBehaviorImpl
+    ApiUserBehaviorImpl
   ];
 
 })();

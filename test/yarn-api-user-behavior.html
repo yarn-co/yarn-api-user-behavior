@@ -1,7 +1,7 @@
 <html>
   <head>
 
-    <title>yarn-service-user-behavior tests</title>
+    <title>yarn-api-user-behavior tests</title>
 
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
@@ -31,7 +31,7 @@
     </test-fixture>
 
     <script>
-      suite('<yarn-service-user-behavior>', function() {
+      suite('<yarn-api-user-behavior>', function() {
 
         var server;
         var withAuth;
@@ -49,7 +49,6 @@
 
         teardown(function() {
           server.restore();
-          localStorage.removeItem(withAuth.localStorageKey);
         });
 
         var fail = function(message, code) {
@@ -128,7 +127,10 @@
           })
           .catch(function(err) {
 
-            expect(JSON.parse(err.request.xhr.responseText).message).to.equal('Not a token error');
+            var xhr = err.request.xhr;
+            var response = xhr.response || JSON.parse(xhr.responseText);
+
+            expect(response.message).to.equal('Not a token error');
             expect(server.processRequest.callCount).to.equal(1);
             server.processRequest.restore();
             done();
@@ -147,13 +149,19 @@
             server.respondWith('POST', 'http://sinon/authenticated', succeed({ success: true }));
           });
 
-          server.respondWith('POST', 'http://sinon/refresh', succeed({
+          var tokens = {
             refresh: 'token',
             access: 'token'
-          }));
+          };
+
+          server.respondWith('POST', 'http://sinon/refresh', succeed(tokens));
+
+          expect(withAuth.getTokens()).to.equal(null);
 
           withAuth.generateRequest().completes
           .then(function(request) {
+
+            expect(withAuth.getTokens()).to.deep.equal(tokens);
 
             expect(request.response.success).to.equal(true);
             expect(server.processRequest.callCount).to.equal(3);
@@ -179,10 +187,14 @@
             server.respondWith('POST', 'http://sinon/authenticated', fail('Failure from retry.', 401));
           });
 
-          server.respondWith('POST', 'http://sinon/refresh', succeed({
+          var tokens = {
             refresh: 'token',
             access: 'token'
-          }));
+          };
+
+          server.respondWith('POST', 'http://sinon/refresh', succeed(tokens));
+
+          expect(withAuth.getTokens()).to.equal(null);
 
           withAuth.generateRequest().completes
           .then(function(request) {
@@ -192,7 +204,12 @@
           })
           .catch(function(err) {
 
-            expect(JSON.parse(err.request.xhr.responseText).message).to.equal('Failure from retry.');
+            var xhr = err.request.xhr;
+            var response = xhr.response || JSON.parse(xhr.responseText);
+
+            expect(withAuth.getTokens()).to.deep.equal(tokens);
+
+            expect(response.message).to.equal('Failure from retry.');
             expect(server.processRequest.callCount).to.equal(3);
             server.processRequest.restore();
             done();

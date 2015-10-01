@@ -1,5 +1,5 @@
 {
-  "name": "yarn-service-user-behavior",
+  "name": "yarn-api-user-behavior",
   "version": "0.0.1",
   "keywords": [
     "web-components",
@@ -12,12 +12,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/yarn-co/yarn-service-user-behavior.git"
+    "url": "git://github.com/yarn-co/yarn-api-user-behavior.git"
   },
-  "main": "yarn-service-user-behavior.html",
+  "main": "yarn-api-user-behavior.html",
   "dependencies": {
     "polymer": "Polymer/polymer#^1.0.0",
-    "yarn-endpoints-behavior": "yarn-co/yarn-endpoints-behavior#^0.1.2"
+    "yarn-endpoints-behavior": "yarn-co/yarn-endpoints-behavior#^0.1.2",
+    "iron-ajax": "polymerelements/iron-ajax#^1.0.5",
+    "promise-polyfill": "polymerlabs/promise-polyfill#^1.0.0"
   },
   "devDependencies": {
     "iron-component-page": "polymerelements/iron-component-page#^1.0.0",
