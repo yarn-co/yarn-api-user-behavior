@@ -49,6 +49,7 @@
 
         teardown(function() {
           server.restore();
+          localStorage.removeItem(withAuth.localStorageKey);
         });
 
         var fail = function(message, code) {
