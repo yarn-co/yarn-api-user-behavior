@@ -9,7 +9,14 @@ var YarnBehaviors = YarnBehaviors || {};
 (function() {
 
   /**
-  Docs
+  This is the natural counterpart to yarn-api-user, which sets-up
+  Yarn's implementation of JWTs.  This behavior has a `generateRequest()`
+  method a la iron-ajax which provides a promise for a request to complete,
+  but unlike iron-ajax, this behavior will attempt to obtain new a new access token
+  if the request fails due to credential expiry.  So, make requests at will and
+  don't worry about refresh tokens!
+
+  The underlying iron-ajax element (`requestor`) is considered public and can be used directly.
 
   @polymerBehavior YarnBehaviors.ApiUserBehavior
   */
@@ -17,23 +24,35 @@ var YarnBehaviors = YarnBehaviors || {};
 
     properties: {
 
+      /**
+       * Name of the endpoint used to trade a refresh token for a new pair of JWTs.
+       */
       refreshTokensEndpoint: {
         type: String,
         value: 'refreshTokens'
       },
 
+      /**
+       * Name of the local storage key where JWTs will be stored.
+       */
       localStorageKey: {
         type: String,
         value: 'yarniverseTokens'
       },
 
+      /**
+       * An iron-ajax instance used to make endpoints requests.
+       */
       requestor: {
         type: Object,
         value: function() {
           return document.createElement('iron-ajax');
-        },
+        }
       },
 
+      /**
+       * An iron-ajax instance used specifically to hit the refresh token endpoint.
+       */
       _refreshRequestor: {
         type: Object,
         value: function() {
@@ -49,7 +68,8 @@ var YarnBehaviors = YarnBehaviors || {};
 
     ready: function() {
 
-      // Set the refresh endpoint, etc. on the refresh requestor
+      // Set the refresh endpoint and other
+      // static options on the refresh requestor
       var origEndpoint = this.endpoint;
 
       // By now hopefully endpoints has been configured
@@ -60,9 +80,17 @@ var YarnBehaviors = YarnBehaviors || {};
       this._refreshRequestor.method = this.method;
       this._refreshRequestor.url = this.url;
 
+      // Restore original endpoint
       this.endpoint = origEndpoint;
+
+      // Yarn APIs are generally json-literate
+      this.requestor.contentType = 'application/json';
+      this.requestor.handleAs = 'json';
     },
 
+    /**
+     * Get access and refresh JWTs.
+     */
     getTokens: function() {
 
       var rawItem = localStorage.getItem(this.localStorageKey);
@@ -74,17 +102,24 @@ var YarnBehaviors = YarnBehaviors || {};
       return JSON.parse(rawItem);
     },
 
+    /**
+     * Store access and refresh JWTs.
+     */
     setTokens: function(tokens) {
 
       localStorage.setItem(this.localStorageKey, JSON.stringify(tokens));
     },
 
+    /**
+     * Use refresh endpoint and current tokens to obtain and store a new pair of JWTs.
+     */
     refreshTokens: function() {
 
       var self = this;
 
       var tokens = this.getTokens() || {};
 
+      // We're POSTing the refresh token
       this._refreshRequestor.body = {
         refresh: tokens.refresh
       };
@@ -97,20 +132,36 @@ var YarnBehaviors = YarnBehaviors || {};
 
           var response = request.response;
 
+          // Store the newly acquired JWTs
           if (response.access && response.refresh) {
             self.setTokens(response);
           }
 
+          // Success
           resolve(request);
         })
         .catch(function(err) {
 
+          // Something went awry
           err.request = request;
           reject(err);
         });
       });
     },
 
+    /**
+     * Returns an object with,
+     * - `options`- the exported iron-ajax settings used to make the request.
+     * - `completes`- a promise that resolves/rejects once the endpoint is hit with
+     * a fresh access token. This promise may include a roundtrip to obtain new tokens
+     * if the original request fails due to an expired token.  Between one and three
+     * web requests may occur.
+     *
+     * Resolves with the request made using the freshed possible credentials.
+     * Rejects with an error.  The error includes `request` (the relevant failed
+     * request) and possibly `refreshRequest` (a failed refresh request).
+     *
+     */
     generateRequest: function() {
 
       var self = this;
@@ -120,7 +171,10 @@ var YarnBehaviors = YarnBehaviors || {};
       // Add auth
       this._setAuthHeaders();
 
+      // Store request options in case we need to retry
       var originalRequestOptions = this.exportRequestorOptions();
+
+      // Make the request
       var originalRequest = this.requestor.generateRequest();
 
       return {
@@ -131,6 +185,7 @@ var YarnBehaviors = YarnBehaviors || {};
 
           originalRequest.completes.then(function() {
 
+            // Piece of cake
             resolve(originalRequest);
           })
           .catch(function(err) {
@@ -148,11 +203,16 @@ var YarnBehaviors = YarnBehaviors || {};
                 // Then try again, doing the dance of setting/resetting options
                 var preRetryRequestOptions = self.exportRequestorOptions();
 
+                // Import options required to retry the original request...
                 self.importRequestorOptions(originalRequestOptions);
+
+                // ...but with our new shiny access token
                 self._setAuthHeaders();
 
+                // Initial the retried request
                 var retryRequest = self.requestor.generateRequest();
 
+                // Restore the original options from before the retry
                 self.importRequestorOptions(preRetryRequestOptions);
 
                 retryRequest.completes.then(function() {
@@ -170,7 +230,7 @@ var YarnBehaviors = YarnBehaviors || {};
               })
               .catch(function(err) {
 
-                // No such luck...
+                // No such luck– refreshing the tokens failed
                 err.refreshRequest = err.request;
                 err.request = originalRequest;
                 reject(err);
@@ -179,7 +239,7 @@ var YarnBehaviors = YarnBehaviors || {};
               return;
             }
 
-            // Failed naturally
+            // The original request failed, but not due to an expired token
             err.request = originalRequest;
             reject(err);
           });
@@ -187,6 +247,10 @@ var YarnBehaviors = YarnBehaviors || {};
       }
     },
 
+    /**
+     * Exports an object representing the requestor's options
+     * required to retry a request.  Compatible with `importRequestorOptions()`.
+     */
     exportRequestorOptions: function() {
 
       var options = {};
@@ -207,6 +271,10 @@ var YarnBehaviors = YarnBehaviors || {};
       return options;
     },
 
+    /**
+     * Imports an object representing the requestor's options
+     * required to retry a request.  Compatible with `exportRequestorOptions()`.
+     */
     importRequestorOptions: function(options) {
 
       var optionName;
@@ -219,12 +287,20 @@ var YarnBehaviors = YarnBehaviors || {};
 
     },
 
+    /**
+     * Keep the requestor up to date with the url/method
+     * determined by the endpoints behavior.
+     */
     _maintainRequestor: function() {
 
       this.requestor.url = this.url;
       this.requestor.method = this.method;
     },
 
+    /**
+     * Set auth headers on the requestor based upon whether
+     * an access token is available.
+     */
     _setAuthHeaders: function() {
 
       var tokens = this.getTokens();
