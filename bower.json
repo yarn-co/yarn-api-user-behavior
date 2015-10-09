@@ -24,7 +24,7 @@
   "devDependencies": {
     "iron-component-page": "polymerelements/iron-component-page#^1.0.0",
     "test-fixture": "polymerelements/test-fixture#^1.0.0",
-    "web-component-tester": "*",
+    "web-component-tester": "3.3.22",
     "webcomponentsjs": "webcomponents/webcomponentsjs#^0.7.0"
   }
 }

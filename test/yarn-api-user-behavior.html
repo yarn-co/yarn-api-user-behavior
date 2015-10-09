@@ -89,6 +89,11 @@
           ];
         };
 
+        var currentTokens = function() {
+
+          var item = localStorage.getItem(withAuth.localStorageKey);
+          return JSON.parse(item);
+        };
 
         test('succeeds with one call for simple request.', function(done) {
 
@@ -157,12 +162,12 @@
 
           server.respondWith('POST', 'http://sinon/refresh', succeed(tokens));
 
-          expect(withAuth.getTokens()).to.equal(null);
+          expect(currentTokens()).to.equal(null);
 
           withAuth.generateRequest().completes
           .then(function(request) {
 
-            expect(withAuth.getTokens()).to.deep.equal(tokens);
+            expect(currentTokens()).to.deep.equal(tokens);
 
             expect(request.response.success).to.equal(true);
             expect(server.processRequest.callCount).to.equal(3);
@@ -195,7 +200,7 @@
 
           server.respondWith('POST', 'http://sinon/refresh', succeed(tokens));
 
-          expect(withAuth.getTokens()).to.equal(null);
+          expect(currentTokens()).to.equal(null);
 
           withAuth.generateRequest().completes
           .then(function(request) {
@@ -208,7 +213,7 @@
             var xhr = err.request.xhr;
             var response = xhr.response || JSON.parse(xhr.responseText);
 
-            expect(withAuth.getTokens()).to.deep.equal(tokens);
+            expect(currentTokens()).to.deep.equal(tokens);
 
             expect(response.message).to.equal('Failure from retry.');
             expect(server.processRequest.callCount).to.equal(3);

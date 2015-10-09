@@ -89,25 +89,36 @@ var YarnBehaviors = YarnBehaviors || {};
     },
 
     /**
-     * Get access and refresh JWTs.
+     * Get access and refresh JWTs, returns a promise.
      */
     getTokens: function() {
 
-      var rawItem = localStorage.getItem(this.localStorageKey);
+      var self = this;
 
-      if (!rawItem) {
-        return null;
-      }
+      return new Promise(function(resolve, reject) {
 
-      return JSON.parse(rawItem);
+        var rawItem = localStorage.getItem(self.localStorageKey);
+
+        if (!rawItem) {
+          resolve(null);
+        }
+
+        resolve(JSON.parse(rawItem));
+      });
     },
 
     /**
-     * Store access and refresh JWTs.
+     * Store access and refresh JWTs, returns a promise.
      */
     setTokens: function(tokens) {
 
-      localStorage.setItem(this.localStorageKey, JSON.stringify(tokens));
+      var self = this;
+
+      return new Promise(function(resolve, reject) {
+
+        localStorage.setItem(self.localStorageKey, JSON.stringify(tokens));
+        resolve();
+      });
     },
 
     /**
@@ -117,35 +128,47 @@ var YarnBehaviors = YarnBehaviors || {};
 
       var self = this;
 
-      var tokens = this.getTokens() || {};
-
-      // We're POSTing the refresh token
-      this._refreshRequestor.body = {
-        refresh: tokens.refresh
-      };
-
-      var request = this._refreshRequestor.generateRequest();
-
       return new Promise(function(resolve, reject) {
 
-        request.completes.then(function() {
+        self.getTokens().then(function(tokens) {
 
-          var response = request.response;
+          tokens = tokens || {};
 
-          // Store the newly acquired JWTs
-          if (response.access && response.refresh) {
-            self.setTokens(response);
-          }
+          // We're POSTing the refresh token
+          self._refreshRequestor.body = {
+            refresh: tokens.refresh
+          };
 
-          // Success
-          resolve(request);
-        })
-        .catch(function(err) {
+          var request = self._refreshRequestor.generateRequest();
 
-          // Something went awry
-          err.request = request;
-          reject(err);
+          request.completes.then(function() {
+
+            var response = request.response;
+
+            // Store the newly acquired JWTs
+            if (response.access && response.refresh) {
+
+              self.setTokens(response).then(function() {
+
+                // Success
+                resolve(request);
+              });
+
+              return;
+            }
+
+            // Success
+            resolve(request);
+          })
+          .catch(function(err) {
+
+            // Something went awry
+            err.request = request;
+            reject(err);
+          });
+
         });
+
       });
     },
 
