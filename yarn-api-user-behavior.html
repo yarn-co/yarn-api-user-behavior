@@ -191,27 +191,34 @@ var YarnBehaviors = YarnBehaviors || {};
 
       var origEndpoint = this.endpoint;
 
-      // Add auth
-      this._setAuthHeaders();
+      var originalRequestOptions;
+      var originalRequest;
 
-      // Store request options in case we need to retry
-      var originalRequestOptions = this.exportRequestorOptions();
-
-      // Make the request
-      var originalRequest = this.requestor.generateRequest();
-
-      return {
-
-        options: originalRequestOptions,
+      var generated = {
 
         completes: new Promise(function(resolve, reject) {
 
-          originalRequest.completes.then(function() {
+          // Add auth
+          self._setAuthHeaders().then(function() {
+
+            // Store request options in case we need to retry
+            originalRequestOptions = generated.options = self.exportRequestorOptions();
+
+            // Make the request
+            originalRequest = self.requestor.generateRequest();
+
+            return originalRequest.completes;
+          })
+          .then(function() {
 
             // Piece of cake
             resolve(originalRequest);
           })
           .catch(function(err) {
+
+            if (!originalRequest) {
+              return reject(err);
+            }
 
             var xhr = originalRequest.xhr;
             var response = xhr.response || JSON.parse(xhr.responseText);
@@ -268,6 +275,8 @@ var YarnBehaviors = YarnBehaviors || {};
           });
         })
       }
+
+      return generated;
     },
 
     /**
@@ -326,13 +335,25 @@ var YarnBehaviors = YarnBehaviors || {};
      */
     _setAuthHeaders: function() {
 
-      var tokens = this.getTokens();
+      var self = this;
 
-      if (tokens && tokens.access) {
-        this.requestor.headers.authorization = 'Bearer ' + tokens.access;
-      } else {
-        delete this.requestor.authorization;
-      }
+      return new Promise(function(resolve, reject) {
+
+        self.getTokens().then(function(tokens) {
+
+          if (tokens && tokens.access) {
+            console.log('set');
+            self.requestor.headers.authorization = 'Bearer ' + tokens.access;
+          } else {
+            console.log('notset');
+            delete self.requestor.authorization;
+          }
+
+          resolve();
+        })
+        .catch(reject);
+
+      });
     }
 
   };
