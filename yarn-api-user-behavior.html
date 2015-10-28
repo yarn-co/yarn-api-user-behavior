@@ -240,7 +240,7 @@ var YarnBehaviors = YarnBehaviors || {};
             var response = xhr.response || JSON.parse(xhr.responseText);
 
             // If the error was just a refresh token error...
-            if (xhr.status === 401 && response &&
+            if (xhr.status === 401 && response && response.message &&
                 ~response.message.indexOf('Token expired')) {
 
               // ...refresh the tokens.
@@ -252,16 +252,21 @@ var YarnBehaviors = YarnBehaviors || {};
                 // Import options required to retry the original request...
                 self.importRequestorOptions(originalRequestOptions);
 
+                var retryRequest;
+
                 // ...but with our new shiny access token
-                self._setAuthHeaders();
+                self._setAuthHeaders()
+                .then(function() {
 
-                // Initial the retried request
-                var retryRequest = self.requestor.generateRequest();
+                  // Initial the retried request
+                  retryRequest = self.requestor.generateRequest();
 
-                // Restore the original options from before the retry
-                self.importRequestorOptions(preRetryRequestOptions);
+                  // Restore the original options from before the retry
+                  self.importRequestorOptions(preRetryRequestOptions);
 
-                retryRequest.completes.then(function() {
+                  return retryRequest.completes;
+                })
+                .then(function() {
 
                   // Worked after retry
                   resolve(retryRequest);
@@ -358,10 +363,10 @@ var YarnBehaviors = YarnBehaviors || {};
         self.getTokens().then(function(tokens) {
 
           if (tokens && tokens.access) {
-            console.log('set');
+
             self.requestor.headers.authorization = 'Bearer ' + tokens.access;
           } else {
-            console.log('notset');
+
             delete self.requestor.authorization;
           }
 
