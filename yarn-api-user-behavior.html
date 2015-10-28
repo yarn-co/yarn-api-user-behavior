@@ -50,6 +50,11 @@ var YarnBehaviors = YarnBehaviors || {};
         }
       },
 
+      autoConfigureApiUser: {
+        type: Boolean,
+        value: true
+      },
+
       /**
        * An iron-ajax instance used specifically to hit the refresh token endpoint.
        */
@@ -67,6 +72,17 @@ var YarnBehaviors = YarnBehaviors || {};
     ],
 
     ready: function() {
+
+      if (this.autoConfigureApiUser) {
+        this.configureApiUser();
+      }
+    },
+
+    /**
+     * Configure the refresh endpoint and requestor defaults.
+     * When `autoConfigureApiUser` is `false` this will be called manually.
+     */
+    configureApiUser: function() {
 
       // Set the refresh endpoint and other
       // static options on the refresh requestor
