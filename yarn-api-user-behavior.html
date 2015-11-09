@@ -63,6 +63,14 @@ var YarnBehaviors = YarnBehaviors || {};
         value: function() {
           return document.createElement('iron-ajax');
         }
+      },
+
+      /**
+       * Only one refresh can occur at a time.  A promise for that refresh lives here.
+       */
+      _pendingRefresh: {
+        type: Object,
+        value: null
       }
 
     },
@@ -144,7 +152,7 @@ var YarnBehaviors = YarnBehaviors || {};
 
       var self = this;
 
-      return new Promise(function(resolve, reject) {
+      this._pendingRefresh = this._pendingRefresh || new Promise(function(resolve, reject) {
 
         self.getTokens().then(function(tokens) {
 
@@ -167,6 +175,7 @@ var YarnBehaviors = YarnBehaviors || {};
               self.setTokens(response).then(function() {
 
                 // Success
+                self._pendingRefresh = null;
                 resolve(request);
               });
 
@@ -174,18 +183,23 @@ var YarnBehaviors = YarnBehaviors || {};
             }
 
             // Success
+            self._pendingRefresh = null;
             resolve(request);
           })
           .catch(function(err) {
 
             // Something went awry
             err.request = request;
+
+            self._pendingRefresh = null;
             reject(err);
           });
 
         });
 
       });
+
+      return this._pendingRefresh;
     },
 
     /**
