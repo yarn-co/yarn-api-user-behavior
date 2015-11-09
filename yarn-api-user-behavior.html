@@ -9,6 +9,13 @@ var YarnBehaviors = YarnBehaviors || {};
 (function() {
 
   /**
+   * Only one refresh can occur at a time (per custom element type).  A promise for that refresh lives here.
+   */
+  var internals = {
+    pendingRefreshes: {}
+  };
+
+  /**
   This is the natural counterpart to yarn-api-user, which sets-up
   Yarn's implementation of JWTs.  This behavior has a `generateRequest()`
   method a la iron-ajax which provides a promise for a request to complete,
@@ -64,14 +71,6 @@ var YarnBehaviors = YarnBehaviors || {};
           return document.createElement('iron-ajax');
         }
       },
-
-      /**
-       * Only one refresh can occur at a time.  A promise for that refresh lives here.
-       */
-      _pendingRefresh: {
-        type: Object,
-        value: null
-      }
 
     },
 
@@ -152,7 +151,10 @@ var YarnBehaviors = YarnBehaviors || {};
 
       var self = this;
 
-      this._pendingRefresh = this._pendingRefresh || new Promise(function(resolve, reject) {
+      var pendingRefreshes = internals.pendingRefreshes;
+
+      // Keep a bucket per custom element name
+      pendingRefreshes[this.is] = pendingRefreshes[this.is] || new Promise(function(resolve, reject) {
 
         self.getTokens().then(function(tokens) {
 
@@ -175,7 +177,7 @@ var YarnBehaviors = YarnBehaviors || {};
               self.setTokens(response).then(function() {
 
                 // Success
-                self._pendingRefresh = null;
+                pendingRefreshes[self.is] = null;
                 resolve(request);
               });
 
@@ -183,7 +185,7 @@ var YarnBehaviors = YarnBehaviors || {};
             }
 
             // Success
-            self._pendingRefresh = null;
+            pendingRefreshes[self.is] = null;
             resolve(request);
           })
           .catch(function(err) {
@@ -191,7 +193,7 @@ var YarnBehaviors = YarnBehaviors || {};
             // Something went awry
             err.request = request;
 
-            self._pendingRefresh = null;
+            pendingRefreshes[self.is] = null;
             reject(err);
           });
 
@@ -199,7 +201,7 @@ var YarnBehaviors = YarnBehaviors || {};
 
       });
 
-      return this._pendingRefresh;
+      return pendingRefreshes[this.is];
     },
 
     /**
