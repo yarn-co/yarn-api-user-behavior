@@ -9,6 +9,13 @@ var YarnBehaviors = YarnBehaviors || {};
 (function() {
 
   /**
+   * Only one refresh can occur at a time (per custom element type).  A promise for that refresh lives here.
+   */
+  var internals = {
+    pendingRefreshes: {}
+  };
+
+  /**
   This is the natural counterpart to yarn-api-user, which sets-up
   Yarn's implementation of JWTs.  This behavior has a `generateRequest()`
   method a la iron-ajax which provides a promise for a request to complete,
@@ -144,7 +151,10 @@ var YarnBehaviors = YarnBehaviors || {};
 
       var self = this;
 
-      return new Promise(function(resolve, reject) {
+      var pendingRefreshes = internals.pendingRefreshes;
+
+      // Keep a bucket per custom element name
+      pendingRefreshes[this.is] = pendingRefreshes[this.is] || new Promise(function(resolve, reject) {
 
         self.getTokens().then(function(tokens) {
 
@@ -167,6 +177,7 @@ var YarnBehaviors = YarnBehaviors || {};
               self.setTokens(response).then(function() {
 
                 // Success
+                pendingRefreshes[self.is] = null;
                 resolve(request);
               });
 
@@ -174,18 +185,23 @@ var YarnBehaviors = YarnBehaviors || {};
             }
 
             // Success
+            pendingRefreshes[self.is] = null;
             resolve(request);
           })
           .catch(function(err) {
 
             // Something went awry
             err.request = request;
+
+            pendingRefreshes[self.is] = null;
             reject(err);
           });
 
         });
 
       });
+
+      return pendingRefreshes[this.is];
     },
 
     /**
