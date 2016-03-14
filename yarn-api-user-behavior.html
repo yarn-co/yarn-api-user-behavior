@@ -253,6 +253,14 @@ var YarnBehaviors = YarnBehaviors || {};
             }
 
             var xhr = originalRequest.xhr;
+
+            //handle timeout - usually due to network disconnect
+            //return error - maybe we should retry instead?  Not sure...
+            if(xhr.status == 0){
+
+              return reject(err);
+            }
+
             var response = xhr.response || JSON.parse(xhr.responseText);
 
             // If the error was just a refresh token error...
